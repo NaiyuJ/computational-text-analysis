@@ -6,3 +6,6 @@ I used word2vec model to do text classification by measuring the cosine similari
 ### Supporting scripts for measuring similarity
 * [msr.py](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/word2vec_text_classification/msr.py)
 * [test_utility.py](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/word2vec_text_classification/test_utility.py)
+
+### Output (posts with categories)
+* [total_cat.csv](https://www.dropbox.com/s/sk1mympp087f022/total_cat.csv?dl=0)

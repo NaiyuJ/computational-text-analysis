@@ -10,5 +10,8 @@ I used word2vec model to do text classification by measuring the cosine similari
 * [msr.py](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/word2vec_text_classification/msr.py)
 * [test_utility.py](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/word2vec_text_classification/test_utility.py)
 
+### Input
+* The total posts I scraped from seven Baidu Tieba: [total_posts.csv](https://www.dropbox.com/s/4tp552pse156tw6/total_posts.csv?dl=0)
+
 ### Output (posts with categories)
 * [total_cat.csv](https://www.dropbox.com/s/sk1mympp087f022/total_cat.csv?dl=0)

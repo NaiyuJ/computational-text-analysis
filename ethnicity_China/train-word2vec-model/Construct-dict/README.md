@@ -9,4 +9,4 @@
 * [file_segment.txt](https://www.dropbox.com/s/o7q3jy1i97xopvv/file_segment.txt?dl=0)
 
 ### Output
-dict.txt
+[dict.txt](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/train-word2vec-model/Construct-dict/dict.txt)

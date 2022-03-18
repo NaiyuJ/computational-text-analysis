@@ -1,4 +1,6 @@
-## Find words in the corpus (construct a dict)
+## Find words in the raw corpus (construct a dict)
+
+This is a preparation for training word2vec model.
 
 ### Input
 * [training_corpus.txt](https://www.dropbox.com/s/rt1afbc2w2y031x/training_corpus.txt?dl=0) (also named as file_corpus.txt) in my dropbox

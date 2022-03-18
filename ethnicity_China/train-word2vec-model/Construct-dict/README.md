@@ -2,6 +2,9 @@
 
 This is a preparation for training word2vec model.
 
+### Run
+* [fw.py](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/train-word2vec-model/Construct-dict/fw.py)
+
 ### Input
 * [training_corpus.txt](https://www.dropbox.com/s/rt1afbc2w2y031x/training_corpus.txt?dl=0) (also named as file_corpus.txt) in my dropbox
 

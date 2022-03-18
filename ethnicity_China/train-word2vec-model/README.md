@@ -1,8 +1,8 @@
 ## Train My Own Word Embeddings (word2vec)
 
 ### Input
-* word dictionary: dict.txt
-* raw corpus: file_corpus.txt
+* word dictionary: [dict.txt](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/train-word2vec-model/dict.txt)
+* raw corpus: [file_corpus.txt](https://github.com/NaiyuJ/computational-text-analysis/blob/main/ethnicity_China/train-word2vec-model/file_corpus.txt)
 
 ### Output (word2vec model)
 I saved the trained model in my dropbox:

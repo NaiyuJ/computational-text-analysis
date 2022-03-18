@@ -1,0 +1,1014 @@
+---
+title: "hui-merge-columns"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## generate primary category and second category
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(readr)
+library(openxlsx)
+library(reshape2)
+library(data.table)
+```
+
+### try 1:
+
+```{r warning=FALSE, message=FALSE}
+jointdataset <- read_csv("res_old_new_3.csv")
+# clean dataset
+jointdataset %>%
+  na_if("") %>%
+  na_if("NA") %>%# convert "" to NA
+  na.omit() %>% # remove NAs
+  unique() # remove duplicates
+# delete rows containing 'NA'
+new_df <- jointdataset %>%
+      mutate_at("content", str_replace, "NA", "")
+new_df <- na.omit(new_df)
+View(jointdataset)
+# new_df <- na.omit(jointdataset)
+```
+
+```{r warning=FALSE, message=FALSE}
+new_df$max_index <- apply(new_df[3:9], 1, which.max)
+new_df$category <- colnames(new_df[3:9])[new_df$max_index]
+new_df$max_score <- apply(new_df[,3:9], 1, 
+                             FUN = function(x) {x = sort(x, decreasing = TRUE)[1]})
+new_df$second_score <- apply(new_df[,3:9], 1, 
+                             FUN = function(x) {x = sort(x, decreasing = TRUE)[2]})
+new_df$second_index_name <- colnames(new_df[,3:9])[apply(new_df[,3:9], 1, 
+                                                   FUN = function(x)which(x==sort(x,partial=6)[6])[1])]
+
+new_df <- new_df %>%
+  mutate(
+   diff = max_score - second_score,
+   new_category = ifelse(max_score < 0.20, "others", category),
+   second_category = ifelse(diff < 0.15, second_index_name, ""),
+   second_category = ifelse(new_category == "others", "", second_category)
+   )
+```
+
+```{r}
+write.xlsx(new_df, 'res_old_new_1_cat2.xlsx')
+write_csv(new_df, 'res_old_new_3_cat1.csv')
+```
+
+```{r}
+res_df2_cat <- read.xlsx("res_df3.xlsx")
+new_df <- new_df %>%
+  mutate(
+   if_correct = ifelse(cat_label == new_category|cat_label == second_category, 1, 0)
+   )
+View(new_df)
+table(new_df$if_correct)
+# 562/(562+135)
+table(res_df2_cat$cat_label[which(res_df2_cat$if_correct == 0)])
+```
+
+```{r}
+table(res_df2_cat$new_category[which(res_df2_cat$if_correct == 0)])
+```
+
+### try 2:
+
+```{r}
+df <- read_csv("res_add_key5.csv")
+df <- na.omit(df)
+#View(df)
+df$max_index <- apply(df[3:9], 1, which.max)
+df$category <- colnames(df[3:9])[df$max_index]
+df$max_score <- apply(df[,3:9], 1, 
+                            FUN = function(x) {x = sort(x, decreasing = TRUE)[1]})
+df$second_score <- apply(df[,3:9], 1, 
+                             FUN = function(x) {x = sort(x, decreasing = TRUE)[2]})
+df$second_index_name <- colnames(df[,3:9])[apply(df[,3:9], 1, 
+                                                   FUN = function(x)which(x==sort(x,partial=6)[6])[1])]
+
+df <- df %>%
+  mutate(
+   diff = max_score - second_score,
+   new_category = ifelse(max_score < 0.20, "others", category),
+   second_category = ifelse(diff < 0.20, second_index_name, ""),
+   second_category = ifelse(new_category == "others", "", second_category)
+   )
+```
+
+```{r}
+df <- df %>%
+  mutate(
+   if_correct = ifelse(cat_label == new_category|cat_label == second_category, 1, 0)
+   )
+#View(df)
+write.xlsx(df, 'res_add_key5_cat.xlsx')
+df_other <- df %>%
+   filter(df$cat_label != "others")
+table(df_other$if_correct)
+# 579/(579+90)
+table(df$cat_label[which(df$if_correct == 0)])
+table(df$new_category[which(df$if_correct == 0)])
+#df_wrong <- df %>%
+#   select(content, cat_label, new_category) %>%
+#   filter(df$if_correct == 0)
+#View(df_wrong)
+```
+
+### try 3:
+
+```{r}
+df <- read_csv("total_scores.csv")
+df <- na.omit(df)
+View(df)
+df$max_index <- apply(df[4:10], 1, which.max)
+df$category <- colnames(df[4:10])[df$max_index]
+df$max_score <- apply(df[,4:10], 1, 
+                            FUN = function(x) {x = sort(x, decreasing = TRUE)[1]})
+df$second_score <- apply(df[,4:10], 1, 
+                             FUN = function(x) {x = sort(x, decreasing = TRUE)[2]})
+df$second_index_name <- colnames(df[,4:10])[apply(df[,4:10], 1, 
+                                                   FUN = function(x)which(x==sort(x,partial=6)[6])[1])]
+
+df <- df %>%
+  mutate(
+   diff = max_score - second_score,
+   new_category = ifelse(max_score < 0.30, "others", category),
+   second_category = ifelse(diff < 0.15, second_index_name, ""),
+   second_category = ifelse(new_category == "others", "", second_category)
+   )
+write.xlsx(df, 'total_cat.xlsx')
+```
+
+## analyze classification
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(ggpubr)
+library(plotly)
+library(funModeling)
+theme_set(theme_pubr())
+```
+
+```{r}
+library(reshape)
+simple_df <- df %>%
+   select(ethnic, content, new_category, second_category) %>%
+   melt(id=c("ethnic","content")) %>%
+   na_if("") %>%
+   na_if("NA") %>%# convert "" to NA
+   na.omit()# remove NA
+View(simple_df)
+```
+
+```{r}
+# some stats
+total_df <- simple_df %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+total_df <- total_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+total_dot <- ggdotchart(
+  total_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean()
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+total_pie <- plot_ly(total_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "jco") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+total_pie
+```
+```{r}
+total_dot
+```
+
+```{r}
+# some stats
+tujia_df <- simple_df %>%
+   filter(ethnic == "Tujia") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+tujia_df <- tujia_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+tujia_dot <- ggdotchart(
+  tujia_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Tujia"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+tujia_pie <- plot_ly(tujia_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "jco") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+tujia_pie
+```
+
+```{r}
+tujia_dot
+```
+
+```{r}
+# some stats
+hui_df <- simple_df %>%
+   filter(ethnic == "Hui") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+hui_df <- hui_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+hui_dot <- ggdotchart(
+  hui_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Hui"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+hui_pie <- plot_ly(hui_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+hui_pie
+```
+
+```{r}
+hui_dot
+```
+
+```{r}
+# some stats
+mon_df <- simple_df %>%
+   filter(ethnic == "Mongolia") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+mon_df <- mon_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+mon_dot <- ggdotchart(
+  mon_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Mongolia"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+mon_pie <- plot_ly(mon_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+mon_pie
+```
+
+
+```{r}
+mon_dot
+```
+
+```{r}
+# some stats
+man_df <- simple_df %>%
+   filter(ethnic == "Man") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+man_df <- man_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+man_dot <- ggdotchart(
+  man_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Man"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+man_pie <- plot_ly(man_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+man_pie
+```
+
+```{r}
+man_dot
+```
+
+```{r}
+# some stats
+zhuang_df <- simple_df %>%
+   filter(ethnic == "Zhuang") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+zhuang_df <- zhuang_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+zhuang_dot <- ggdotchart(
+  zhuang_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Zhuang"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+zhuang_pie <- plot_ly(zhuang_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+zhuang_pie
+```
+
+
+```{r}
+zhuang_dot
+```
+
+```{r}
+# some stats
+miao_df <- simple_df %>%
+   filter(ethnic == "Miao") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+miao_df <- miao_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+miao_dot <- ggdotchart(
+  miao_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Miao"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+miao_pie <- plot_ly(miao_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+miao_pie
+```
+
+```{r}
+miao_dot
+```
+
+```{r}
+# some stats
+yi_df <- simple_df %>%
+   filter(ethnic == "Yi") %>%
+  group_by(value) %>%
+  summarise(counts = n())
+
+yi_df <- yi_df %>%
+  mutate(prop = round(counts*100/sum(counts), 1))
+
+# create a dotchart
+yi_dot <- ggdotchart(
+  yi_df, x = "value", y = "counts",
+  color = "value", size = 3,      # Points color and size
+  add = "segment",              # Add line segments
+  add.params = list(size = 2), 
+  palette = "jco",
+  rotate = TRUE,
+  sorting = "desc",
+  ylab = "The number of posts",
+  xlab = "",
+  ggtheme = theme_pubclean(),
+  title = "Yi"
+)+
+  rremove("legend")
+# create a pie chart
+#tujia_pie <- ggpie(
+#  tujia_df, x = "prop", label = paste0(tujia_df$prop, "%"),
+#  lab.pos = "out", lab.font = c(2, "black"), 
+#  fill = "category", color = "white",
+#  palette = "jco",
+#  legend.title = ""
+#)
+
+yi_pie <- plot_ly(yi_df, labels = ~value, values = ~prop, type = 'pie',
+                     textposition = 'outside',textinfo = 'label+percent',
+                     showlegend = FALSE, hole = 0.6, colors = "Dark2") %>%
+  layout(
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+yi_pie
+```
+
+```{r}
+yi_dot
+```
+
+```{r}
+library(ggpubr)
+arrange <- ggarrange(tujia_dot+rremove("xlab"), hui_dot+rremove("xlab"), man_dot+rremove("xlab"), mon_dot+rremove("xlab"), 
+          zhuang_dot+rremove("xlab"), miao_dot, yi_dot,
+          ncol = 2, nrow = 4)
+arrange
+ggsave("arrangedplot.png", arrange, width = 8, height = 10)
+```
+
+```{r}
+total_cat <- read_csv("total_cat.csv")
+summary(total_cat)
+```
+
+## keywords extraction
+
+```{r warning=FALSE, message=FALSE}
+library(htmlwidgets)
+library(jiebaRD)
+library(jiebaR)
+library(webshot)
+library(wordcloud2)
+```
+
+```{r}
+content <- toString(total_cat$content)
+work <- worker(stop_word = "scu_stopwords.txt")
+segwords <- work <= content
+segwords <- segwords[nchar(segwords) > 1]
+top50 <- sort(table(segwords), decreasing = TRUE)[1:50]; top50
+#cloud <- wordcloud2(top50, size =1, color = 'random-light', shape = 'diamond')
+#saveWidget(cloud,"top50.html",selfcontained = F)
+#webshot::webshot("top50.html","1.png",vwidth = 700, vheight = 500, delay =10)
+```
+
+```{r}
+#top25 <- sort(table(segwords), decreasing = TRUE)[1:25]
+library(showtext)
+showtext_auto()
+ggplot(data = as.data.frame(top25), 
+       aes(x = segwords, y = Freq)) +
+  geom_bar(position = position_dodge(0.9), stat = "identity") +
+  geom_col(fill = "cornflowerblue")+
+  coord_flip()+
+  theme_minimal()
+```
+
+## analyze sentiment results
+
+```{r}
+total_sent <- read_csv("total_sent.csv")
+mean(total_sent$mis_prediction, na.rm=TRUE)
+```
+
+```{r}
+# group by category
+sent_df1 <- total_sent %>%
+  group_by(ethnic) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df1 <- sent_df1 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+ggplot(sent_df1, aes(x = ethnic, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Sentiment Scores",
+       color = "",
+       x = "",
+       title = "Sentiment for All Samples")+
+  theme_pubclean()+
+  coord_flip()
+```
+
+```{r}
+library(reshape)
+# View(total_sent)
+total_sent <- as.data.frame(total_sent)
+simple_df2 <- total_sent %>%
+   dplyr::select(ethnic, content, new_category, second_category, mis_prediction) %>%
+   melt(id=c("ethnic","content", "mis_prediction")) %>%
+   na_if("") %>%
+   na_if("NA") %>%# convert "" to NA
+   na.omit()# remove NA
+#View(simple_df2)
+```
+
+```{r}
+# group by category
+sent_df2 <- simple_df2 %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df2 <- sent_df2 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+ggplot(sent_df2, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Sentiment Scores",
+       color = "",
+       x = "",
+       title = "Sentiment for All Samples")+
+  theme_pubclean()+
+  coord_flip()
+```
+
+```{r}
+man_sent <- simple_df2 %>%
+   filter(ethnic == "Man")
+```
+
+```{r}
+# group by category
+sent_df3 <- man_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df3 <- sent_df3 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+man_score <- ggplot(sent_df3, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Man",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+man_score
+```
+
+```{r}
+tujia_sent <- simple_df2 %>%
+   filter(ethnic == "Tujia")
+```
+
+```{r}
+tujia_sent <- simple_df2 %>%
+   filter(ethnic == "Tujia")
+# group by category
+sent_df4 <- tujia_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df4 <- sent_df4 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+tujia_score <- ggplot(sent_df4, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Tujia",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+tujia_score
+```
+
+```{r}
+mon_sent <- simple_df2 %>%
+   filter(ethnic == "Mongolia")
+# group by category
+sent_df5 <- mon_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df5 <- sent_df5 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+mon_score <- ggplot(sent_df5, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Mongolia",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+mon_score
+```
+
+```{r}
+hui_sent <- simple_df2 %>%
+   filter(ethnic == "Hui")
+# group by category
+sent_df6 <- hui_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df6 <- sent_df6 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+hui_score <- ggplot(sent_df6, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Hui",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+hui_score
+```
+
+```{r}
+zhuang_sent <- simple_df2 %>%
+   filter(ethnic == "Zhuang")
+# group by category
+sent_df7 <- zhuang_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df7 <- sent_df7 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+zhuang_score <- ggplot(sent_df7, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Zhuang",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+zhuang_score
+```
+
+```{r}
+miao_sent <- simple_df2 %>%
+   filter(ethnic == "Miao")
+# group by category
+sent_df8 <- miao_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df8 <- sent_df8 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+miao_score <- ggplot(sent_df8, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Miao",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+miao_score
+```
+
+```{r}
+yi_sent <- simple_df2 %>%
+   filter(ethnic == "Yi")
+# group by category
+sent_df9 <- yi_sent %>%
+  group_by(value) %>%
+  dplyr::summarise(n = n(),
+            mean = mean(mis_prediction, na.rm=TRUE),
+            sd = sd(mis_prediction, na.rm=TRUE),
+            se = sd/sqrt(n))
+
+sent_df9 <- sent_df9 %>%
+  mutate(
+    if_average = case_when(mean > 0.8431211 ~ "Above average",
+                           mean <= 0.8431211 ~ "On and below average") 
+  )
+# draw the graph
+yi_score <- ggplot(sent_df9, aes(x = value, y = mean,
+                color = factor(if_average)))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean - 1.96*se, 
+                    ymax = mean + 1.96*se), width = .1)+
+  scale_color_manual(values = c("indianred3", 
+                                "cornflowerblue"))+
+  labs(y = "Yi",
+       color = "",
+       x = "",
+       title = "")+
+  theme_pubclean()+
+  coord_flip()
+yi_score
+```
+
+
+```{r}
+arrange2 <- ggarrange(tujia_score, hui_score, man_score+rremove("legend"), mon_score+rremove("legend"), zhuang_score+rremove("legend"), miao_score+rremove("legend"), yi_score+rremove("legend"), ncol = 2, nrow = 4)
+arrange2
+ggsave("arrangedplot2.png", arrange2, width = 8, height = 10)
+```
+
+```{r}
+table(total_sent$ethnic)
+counts <- table(total_sent$ethnic)
+barplot(counts, main="Posts Distribution", horiz=TRUE,
+        names.arg = c("Tujia", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))
+
+library(RColorBrewer)
+coul <- brewer.pal(7, "Set2") 
+post_num <- barplot(counts, col=coul, main="Posts Distribution")
+ggsave("post_num.png", post_num)
+```
+
+## generate tables for the final paper
+
+```{r}
+corpus_table <- read.xlsx("table_corpus.xlsx")
+install.packages("kableExtra")
+library(kableExtra)
+
+corpus_table %>%
+  kbl(caption="Table 1: Sources of websites that used to construct the corpus",
+       format= "html",
+   col.names = c("Ethnic group","Sources of external corpus"),
+                  align="r") %>%
+   kable_classic(full_width = F, html_font = "helvetica")
+```
+
+
+```{r}
+seed_table <- read.xlsx("seedwords.xlsx")
+seed_t <- seed_table %>%
+  kbl(caption="",
+       format= "html",
+   col.names = c("Pre-defined category","Seed words", "Full dictionary"),
+                  align="r") %>%
+   kable_minimal(full_width = F, html_font = "helvetica")
+seed_t
+```
+
+```{r}
+View(print_table)
+print_table <- total_cat[4000:4020,] %>%
+   dplyr::select(ethnic, content, networking, job, culture, 
+                 language, religion, admin, policy, max_score, diff, new_category, second_category)
+
+
+```
+
+```{r}
+seed_table <- read.xlsx("seedwords.xlsx")
+print_table %>%
+  kbl(caption="",
+       format= "html",
+   col.names = c("ethnic", "content", "networking", "job", "culture", 
+                 "language", "religion", "admin", "policy", "max_score", "diff", "new_category", "second_category"),
+                  align="r") %>%
+   kable_minimal(full_width = F, html_font = "helvetica")
+
+```
+
+# analyze Hui religions
+
+```{r}
+hui_rel <- simple_df2 %>%
+  filter(ethnic == "Hui" & value == "religion")
+# View(hui_rel)
+```
+
+```{r}
+content <- toString(hui_rel$content)
+work <- worker(stop_word = "scu_stopwords.txt")
+segwords <- work <= content
+segwords <- segwords[nchar(segwords) > 1]
+top20 <- sort(table(segwords), decreasing = TRUE)[1:20]; top20
+#cloud <- wordcloud2(top50, size =1, color = 'random-light', shape = 'diamond')
+#saveWidget(cloud,"top50.html",selfcontained = F)
+#webshot::webshot("top50.html","1.png",vwidth = 700, vheight = 500, delay =10)
+```
+
+```{r}
+#top25 <- sort(table(segwords), decreasing = TRUE)[1:25]
+library(showtext)
+showtext_auto()
+ggplot(data = as.data.frame(top20), 
+       aes(x = segwords, y = Freq)) +
+  geom_bar(position = position_dodge(0.9), stat = "identity") +
+  geom_col(fill = "#4ba7b3")+
+  coord_flip()+
+  theme_minimal()
+```
+
